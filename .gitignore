@@ -6,3 +6,6 @@ samples/real_*
 # Служебное
 .claude/
 __pycache__/
+
+# Настройки для Streamlit Cloud (там пароль)
+.streamlit/secrets.toml
