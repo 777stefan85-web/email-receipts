@@ -1,0 +1,18 @@
+Message-ID: <test-link-only-0001@mail.example>
+Date: Sat, 18 Oct 2026 10:00:00 +0300
+From: Me <my@mail.ru>
+To: Me <my@gmail.com>
+Subject: Fwd: Ваш электронный чек
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+-------- Пересланное сообщение --------
+От: ОФД <noreply@ofd.ru>
+
+Здравствуйте! Ваш кассовый чек от 16.10.2026 на сумму 1 234,50 руб.
+ИТОГ: 1 234,50
+ФН: 9960440300112233
+ФД: 4455
+ФП: 1029384756
+Посмотреть чек: https://check.ofd.ru/rec/9960440300112233/4455/1029384756

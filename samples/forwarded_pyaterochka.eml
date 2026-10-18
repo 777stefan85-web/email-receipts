@@ -1,0 +1,91 @@
+Message-ID: <test-forward-0001@mail.example>
+Date: Sat, 18 Oct 2026 09:15:00 +0300
+From: Me <my@mail.ru>
+To: Me <my@gmail.com>
+Subject: Fwd: Кассовый чек
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="BOUNDARY42"
+
+--BOUNDARY42
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+---------- Пересланное сообщение ---------
+От: noreply@taxcom.ru
+Дата: 17.10.2026, 14:23
+Тема: Кассовый чек
+
+Кассовый чек. Приход
+ООО «Агроторг» (Пятёрочка)
+17.10.2026 14:22
+1. Кефир 1% 900г
+Цена 79,90
+Кол-во 1
+Сумма 79,90
+НДС 10%
+2. Томаты черри 250г
+Цена 159,99
+Кол-во 2
+Сумма 319,98
+НДС 10%
+3. Огурцы гладкие
+Цена 199,90
+Кол-во 0,612
+Сумма 122,34
+НДС 10%
+4. Вода BONAQUA негаз. 1,5л
+Цена 64,99
+Кол-во 1
+Сумма 64,99
+НДС 20%
+ИТОГО: 587,21
+ФН 7281440500987654 ФД 112233 ФП 2233445566
+https://receipt.taxcom.ru/v01/show?fp=2233445566&s=587.21
+
+--BOUNDARY42
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<div dir="ltr"><br><div class="gmail_quote">
+<div dir="ltr" class="gmail_attr">---------- Пересланное сообщение ---------<br>
+От: <b>noreply@taxcom.ru</b><br>Дата: 17.10.2026, 14:23<br>Тема: Кассовый чек<br></div><br>
+<blockquote class="gmail_quote" style="margin:0 0 0 .8ex;border-left:1px #ccc solid;padding-left:1ex">
+<div style="font-family:Arial">
+  <div><b>Кассовый чек. Приход</b></div>
+  <div>ООО «Агроторг» (Пятёрочка)</div>
+  <div>17.10.2026 14:22</div>
+  <div class="item">
+    <div>1. Кефир 1% 900г</div>
+    <div><span>Цена</span> <span>79,90</span></div>
+    <div><span>Кол-во</span> <span>1</span></div>
+    <div><span>Сумма</span> <span>79,90</span></div>
+    <div>НДС 10%</div>
+  </div>
+  <div class="item">
+    <div>2. Томаты черри 250г</div>
+    <div><span>Цена</span> <span>159,99</span></div>
+    <div><span>Кол-во</span> <span>2</span></div>
+    <div><span>Сумма</span> <span>319,98</span></div>
+    <div>НДС 10%</div>
+  </div>
+  <div class="item">
+    <div>3. Огурцы гладкие</div>
+    <div><span>Цена</span> <span>199,90</span></div>
+    <div><span>Кол-во</span> <span>0,612</span></div>
+    <div><span>Сумма</span> <span>122,34</span></div>
+    <div>НДС 10%</div>
+  </div>
+  <div class="item">
+    <div>4. Вода BONAQUA негаз. 1,5л</div>
+    <div><span>Цена</span> <span>64,99</span></div>
+    <div><span>Кол-во</span> <span>1</span></div>
+    <div><span>Сумма</span> <span>64,99</span></div>
+    <div>НДС 20%</div>
+  </div>
+  <div><b>ИТОГО: 587,21</b></div>
+  <div>ФН 7281440500987654 ФД 112233 ФП 2233445566</div>
+  <div><a href="https://receipt.taxcom.ru/v01/show?fp=2233445566&amp;s=587.21">Чек на сайте ОФД</a></div>
+</div>
+</blockquote></div></div>
+
+--BOUNDARY42--

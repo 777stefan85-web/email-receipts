@@ -1,0 +1,8 @@
+# Пароль и личные данные — не загружать
+.env
+receipts.db
+samples/real_*
+
+# Служебное
+.claude/
+__pycache__/

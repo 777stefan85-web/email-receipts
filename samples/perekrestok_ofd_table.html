@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!-- Тестовый пример: чек ОФД в виде HTML-таблицы (выдуманные данные) -->
+<html>
+<head><meta charset="utf-8"><title>Кассовый чек</title>
+<style>td{font-family:Arial;font-size:13px}</style></head>
+<body>
+<table width="600" align="center" cellpadding="0" cellspacing="0">
+  <tr><td>
+    <table width="100%">
+      <tr><td style="font-size:18px"><b>Кассовый чек. Приход</b></td></tr>
+      <tr><td>АО «ТОРГОВЫЙ ДОМ «ПЕРЕКРЕСТОК»</td></tr>
+      <tr><td>г. Москва, ул. Примерная, д. 1</td></tr>
+      <tr><td>ИНН 7728029110</td></tr>
+      <tr><td>18.10.2026 12:34</td></tr>
+      <tr><td>Смена № 215 · Чек № 87</td></tr>
+    </table>
+  </td></tr>
+  <tr><td>
+    <table width="100%" border="1" style="border-collapse:collapse">
+      <thead>
+        <tr><th>№</th><th>Наименование</th><th>Цена</th><th>Кол-во</th><th>Сумма</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>Молоко ПРОСТОКВАШИНО 2,5% 930мл</td><td>89,99</td><td>2</td><td>179,98</td></tr>
+        <tr><td>2</td><td>Бананы весовые</td><td>139,99</td><td>1,234 кг</td><td>172,75</td></tr>
+        <tr><td>3</td><td>Хлеб Бородинский нарезка 400г</td><td>54,99</td><td>1</td><td>54,99</td></tr>
+        <tr><td>4</td><td>Сыр РОССИЙСКИЙ 45% 200г</td><td>249,99</td><td>1</td><td>249,99</td></tr>
+        <tr><td>5</td><td>Яйцо куриное С1 10шт</td><td>119,99</td><td>1</td><td>119,99</td></tr>
+        <tr><td>6</td><td>Пакет-майка ПЕРЕКРЕСТОК</td><td>9,99</td><td>1</td><td>9,99</td></tr>
+      </tbody>
+    </table>
+  </td></tr>
+  <tr><td>
+    <table width="100%">
+      <tr><td><b>ИТОГ</b></td><td align="right"><b>787,69</b></td></tr>
+      <tr><td>Безналичными</td><td align="right">787,69</td></tr>
+      <tr><td>в т.ч. НДС 10%</td><td align="right">55,24</td></tr>
+      <tr><td>в т.ч. НДС 20%</td><td align="right">45,46</td></tr>
+      <tr><td>РН ККТ</td><td align="right">0001234567012345</td></tr>
+      <tr><td>ФН</td><td align="right">7380440700123456</td></tr>
+      <tr><td>ФД</td><td align="right">54321</td></tr>
+      <tr><td>ФП</td><td align="right">3456789012</td></tr>
+      <tr><td colspan="2">Оператор фискальных данных: ООО «Ярус» (ОФД-Я), сайт ofd-ya.ru</td></tr>
+      <tr><td colspan="2"><a href="https://ofd-ya.ru/check?fn=7380440700123456&amp;fd=54321&amp;fp=3456789012">Посмотреть чек на сайте ОФД</a></td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
