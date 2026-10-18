@@ -19,13 +19,17 @@ log = logging.getLogger("app")
 def check_mail() -> tuple[int, str | None]:
     """Забирает новые письма, разбирает и сохраняет. Возвращает (кол-во новых, ошибка)."""
     try:
-        messages = mail_client.fetch_new_messages(storage.is_processed)
+        messages = mail_client.fetch_new_messages(
+            lambda mid: storage.is_processed(mid, receipt_parser.PARSER_VERSION))
     except Exception as e:
         log.warning("Ошибка IMAP: %s", type(e).__name__)
         return 0, mail_client.safe_error_text(e)
 
-    # Отпечатки уже показанных чеков — чтобы повторно пересланный чек не дублировался в ленте
-    known = {receipt_parser.receipt_key(e["data"]) for e in storage.list_entries() if e["status"] == "receipt"}
+    # Отпечатки уже показанных чеков — чтобы повторно пересланный чек не дублировался в ленте.
+    # Письма, которые сейчас разбираются заново, не считаем: иначе чек совпадёт сам с собой.
+    batch = {mail_client.message_id_of(m) for m in messages}
+    known = {receipt_parser.receipt_key(e["data"]) for e in storage.list_entries()
+             if e["status"] == "receipt" and e["message_id"] not in batch}
     for msg in messages:
         mid = mail_client.message_id_of(msg)
         subject = str(msg.get("Subject", ""))[:200]

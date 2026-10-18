@@ -22,14 +22,20 @@ def _connect():
     return conn
 
 
-def is_processed(message_id: str) -> bool:
-    # Чеки без позиций (только ссылка) разбираем заново: позиции могут появиться на сайте ОФД позже,
-    # или разбор научился их доставать
+def is_processed(message_id: str, parser_version: int) -> bool:
+    """Письмо уже разобрано и разбирать заново не нужно.
+
+    Заново разбираем: чеки без позиций (позиции могут появиться на сайте ОФД позже)
+    и письма, разобранные старой версией разбора.
+    """
     with _connect() as conn:
         row = conn.execute(
-            "SELECT 1 FROM processed WHERE message_id = ? AND status != 'no_items'", (message_id,)
+            "SELECT status, data_json FROM processed WHERE message_id = ?", (message_id,)
         ).fetchone()
-    return row is not None
+    if row is None or row["status"] == "no_items":
+        return False
+    data = json.loads(row["data_json"]) if row["data_json"] else {}
+    return data.get("parser_version", 1) >= parser_version or row["status"] == "error"
 
 
 def save(message_id: str, mail_date: str, subject: str, status: str, data: dict | None):

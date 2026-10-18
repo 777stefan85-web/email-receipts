@@ -19,6 +19,9 @@ import config
 
 log = logging.getLogger(__name__)
 
+# Увеличивайте при изменении разбора — сохранённые письма будут разобраны заново
+PARSER_VERSION = 2
+
 # Число: «1 234,50», «89.99», «2», «0,532»
 NUM = r"(?:\d{1,3}(?:[  ]\d{3})+|\d+)(?:[.,]\d+)?"
 
@@ -210,6 +213,10 @@ def _pick_qty_price(a: str, ua, b: str, ub) -> tuple[float, float]:
     return (fa, fb) if fa <= fb else (fb, fa)
 
 
+# Строка только с единицей измерения: «; шт.», «кг», «шт. или ед.»
+_UNIT_LINE_RE = re.compile(r"^[;:,.|\s]*(шт|кг|г|л|ед|упак)\.?(\s*или\s*ед\.?)?\s*$", re.I)
+
+
 def parse_text_lines(text: str) -> list[dict]:
     items = []
     last_text = None  # последняя «словесная» строка — кандидат в названия
@@ -249,6 +256,8 @@ def parse_text_lines(text: str) -> list[dict]:
             key = "price" if label == "цена" else "qty" if label.startswith("кол") else "sum"
             fields[key] = to_float(m["val"])
             continue
+        if _UNIT_LINE_RE.match(line):
+            continue  # «; шт.» под названием (Такском) — не название
         if fields:
             flush_labelled()
         if re.search(r"[A-Za-zА-Яа-яЁё]{2}", line):
@@ -286,6 +295,8 @@ def parse_triple_lines(text: str) -> list[dict]:
                     items.append(item)
                 name_lines = []
                 continue
+        if _UNIT_LINE_RE.match(line):
+            continue
         if _NOISE_RE.match(line):
             name_lines = []
         elif re.search(r"[A-Za-zА-Яа-яЁё]{2}", line):
@@ -556,6 +567,7 @@ def parse_parts(htmls: list[str], texts: list[str], pdf_texts: list[str], use_ll
         "links": links,
         "source": method if items else None,
         "warnings": [],
+        "parser_version": PARSER_VERSION,
     }
 
     # Позиций в письме нет, но есть ссылка на чек — пробуем скачать чек с сайта ОФД
