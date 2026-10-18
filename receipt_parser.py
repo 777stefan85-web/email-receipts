@@ -258,6 +258,48 @@ def parse_text_lines(text: str) -> list[dict]:
     return items
 
 
+# «[Название] 1.046 239.00 249.99» — количество, цена, сумма в конце строки (PDF Магнита)
+_TRIPLE_RE = re.compile(r"^(?P<name>.*?)\s*(?P<q>\d+(?:[.,]\d+)?)\s+(?P<p>\d+(?:[.,]\d+)?)\s+(?P<s>\d+(?:[.,]\d+)?)$")
+# Служебные строки, которые не входят в название товара
+_NOISE_RE = re.compile(
+    r"^(ндс|признак|способ|мера|расчета|шт\.|кг$|код товара|рез\.|пр\.$|ц\. за|сумма|наим|итог|смена|"
+    r"n:|кассовый|приход|инн|дополнительные|номер заказа)",
+    re.I,
+)
+
+
+def parse_triple_lines(text: str) -> list[dict]:
+    """Название на 1–2 строках, затем «кол-во цена сумма» (в той же или отдельной строке)."""
+    items = []
+    name_lines: list[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = _TRIPLE_RE.match(line)
+        if m:
+            q, p, s = to_float(m["q"]), to_float(m["p"]), to_float(m["s"])
+            if q > 0 and abs(q * p - s) <= max(0.02, 0.01 * s):
+                name = " ".join(name_lines[-2:] + [m["name"]]).strip()
+                item = _make_item(name, q, p, s)
+                if item:
+                    items.append(item)
+                name_lines = []
+                continue
+        if _NOISE_RE.match(line):
+            name_lines = []
+        elif re.search(r"[A-Za-zА-Яа-яЁё]{2}", line):
+            name_lines.append(line)
+    return items
+
+
+def parse_text(text: str) -> list[dict]:
+    """Пробует все построчные форматы и берёт тот, что лучше сходится с итогом."""
+    total = find_total(text)
+    variants = [parse_text_lines(text), parse_triple_lines(text)]
+    return max(variants, key=lambda items: (items_match_total(items, total), len(items)))
+
+
 # ---------------------------------------------------------------- реквизиты чека
 
 _STORES = [
@@ -281,6 +323,7 @@ _RECEIPT_MARKERS = [
     r"фискальн", r"оператор фискальных данных", r"\bИТОГО?\b", r"приход",
 ]
 _OFD_LINK_RE = re.compile(r"ofd|nalog\.(gov\.)?ru|taxcom|kontur|sbis|check|receipt|чек", re.I)
+_RECEIPT_LINK_RE = re.compile(r"[?&](fn|fd|fp|fs|fpd)=\d|/\d{16}/", re.I)
 
 
 def find_total(text: str) -> float | None:
@@ -428,22 +471,73 @@ def parse_with_llm(text: str) -> dict | None:
 
 # ---------------------------------------------------------------- общий разбор
 
-def parse_parts(htmls: list[str], texts: list[str], pdf_texts: list[str], use_llm: bool = True) -> dict:
+def fetch_linked_receipt(links: list[str]) -> tuple[str, str, list[dict]] | None:
+    """Скачивает чек по ссылке из письма. Возвращает (метод, текст, позиции) или None.
+
+    Ссылка может вести на PDF, на HTML-страницу с чеком или на страницу, которая
+    показывает PDF (как у ОФД Магнита): тогда достаём путь к PDF и скачиваем его в той же сессии.
+    """
+    import http.cookiejar
+    import urllib.request
+    from urllib.parse import urljoin
+
+    best = None
+    for url in links[:3]:
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        opener.addheaders = [("User-Agent", "Mozilla/5.0")]
+        try:
+            resp = opener.open(url, timeout=LINK_TIMEOUT)
+            data = resp.read(LINK_MAX_BYTES)
+            ctype = resp.headers.get("Content-Type", "")
+            if "pdf" in ctype or data[:5] == b"%PDF-":
+                text = pdf_to_text(data)
+                found = ("link_pdf", text, parse_text(text))
+            else:
+                html = data.decode(resp.headers.get_content_charset() or "utf-8", errors="replace")
+                # Путь к PDF внутри страницы, иногда с экранированными слэшами: \\/CheckWebApp\\/...\.pdf
+                m = re.search(r"(?:\\*/[\w.-]+)+\.pdf[^'\"\]\s]*", html)
+                if m:
+                    pdf_url = urljoin(url, re.sub(r"\\+", "", m.group(0)))
+                    pdf = opener.open(pdf_url, timeout=LINK_TIMEOUT).read(LINK_MAX_BYTES)
+                    text = pdf_to_text(pdf) if pdf[:5] == b"%PDF-" else ""
+                    found = ("link_pdf", text, parse_text(text))
+                else:
+                    text = html_to_text(html)
+                    found = ("link_html", text, parse_html_tables(html) or parse_text(text))
+        except Exception as e:
+            log.warning("Не удалось скачать чек по ссылке: %s", type(e).__name__)
+            continue
+        if found[2]:
+            return found
+        best = best or found
+    return best
+
+
+LINK_TIMEOUT = 30
+LINK_MAX_BYTES = 5_000_000
+
+
+def parse_parts(htmls: list[str], texts: list[str], pdf_texts: list[str], use_llm: bool = True,
+                fetch_links: bool = True) -> dict:
     sources = []  # (метод, текст, позиции)
     links: list[str] = []
     for html in htmls:
         links += extract_links(html)
         text = html_to_text(html)
         items = parse_html_tables(html)
-        sources.append(("html_table" if items else "html_text", text, items or parse_text_lines(text)))
+        sources.append(("html_table" if items else "html_text", text, items or parse_text(text)))
     for t in texts:
-        sources.append(("text", t, parse_text_lines(t)))
+        sources.append(("text", t, parse_text(t)))
     for t in pdf_texts:
-        sources.append(("pdf", t, parse_text_lines(t)))
+        sources.append(("pdf", t, parse_text(t)))
 
     full_text = "\n\n".join(s[1] for s in sources)
     links += re.findall(r"https?://[^\s<>\"'|]+", full_text)
-    links = list(dict.fromkeys(u.rstrip(").,") for u in links if _OFD_LINK_RE.search(u)))
+    links = list(dict.fromkeys(u.rstrip(").,") for u in links
+                               if u.startswith("http") and _OFD_LINK_RE.search(u)))
+    # Ссылки на конкретный чек (с ФН/ФД/ФП в адресе) важнее главных страниц сайтов ОФД и ФНС
+    specific = [u for u in links if _RECEIPT_LINK_RE.search(u)]
+    links = specific or links
 
     total = find_total(full_text)
     # лучший источник: сначала тот, где сумма позиций сходится с итогом, затем по числу позиций
@@ -463,6 +557,20 @@ def parse_parts(htmls: list[str], texts: list[str], pdf_texts: list[str], use_ll
         "source": method if items else None,
         "warnings": [],
     }
+
+    # Позиций в письме нет, но есть ссылка на чек — пробуем скачать чек с сайта ОФД
+    if not items and fetch_links and links:
+        fetched = fetch_linked_receipt(links)
+        if fetched:
+            method, link_text, items = fetched
+            full_text += "\n\n" + link_text
+            if items:
+                total = find_total(link_text) or total
+                result.update(
+                    is_receipt=True, items=items, source=method, total=total,
+                    store=result["store"] or find_store(link_text),
+                    date=result["date"] or find_date(link_text),
+                )
 
     if items and items_match_total(items, total):
         return result
@@ -491,9 +599,9 @@ def parse_parts(htmls: list[str], texts: list[str], pdf_texts: list[str], use_ll
     return result
 
 
-def parse_message(msg, use_llm: bool = True) -> dict:
+def parse_message(msg, use_llm: bool = True, fetch_links: bool = True) -> dict:
     parts = collect_parts(msg)
-    result = parse_parts(parts["html"], parts["text"], parts["pdf"], use_llm=use_llm)
+    result = parse_parts(parts["html"], parts["text"], parts["pdf"], use_llm=use_llm, fetch_links=fetch_links)
     if not result["date"] and msg.get("Date"):
         try:
             result["date"] = parsedate_to_datetime(str(msg["Date"])).strftime("%d.%m.%Y")
