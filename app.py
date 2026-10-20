@@ -63,7 +63,8 @@ def items_csv(items: list[dict]) -> bytes:
 
 st.set_page_config(page_title="Чеки из почты", page_icon="🧾")
 st.title("🧾 Чеки из почты")
-st.caption(f"Ящик: {config.IMAP_USER or '—'} · отправители: {', '.join(config.ALLOWED_SENDERS) or '—'} · "
+senders = "любые" if config.ANY_SENDER else (", ".join(config.ALLOWED_SENDERS) or "—")
+st.caption(f"Ящик: {config.IMAP_USER or '—'} · отправители: {senders} · "
            f"LLM: {'вкл' if config.ANTHROPIC_API_KEY else 'выкл'}")
 
 col1, col2 = st.columns([1, 2])

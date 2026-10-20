@@ -20,7 +20,7 @@ import config
 log = logging.getLogger(__name__)
 
 # Увеличивайте при изменении разбора — сохранённые письма будут разобраны заново
-PARSER_VERSION = 2
+PARSER_VERSION = 3
 
 # Число: «1 234,50», «89.99», «2», «0,532»
 NUM = r"(?:\d{1,3}(?:[  ]\d{3})+|\d+)(?:[.,]\d+)?"
@@ -114,16 +114,25 @@ def extract_links(html: str) -> list[str]:
 # ---------------------------------------------------------------- позиции: HTML-таблица
 
 _COLS = {
-    "name": re.compile(r"наимен|товар|предмет|позици|продукт", re.I),
+    "name": re.compile(r"наим|товар|предмет|позици|продукт", re.I),
     "price": re.compile(r"цена", re.I),
     "qty": re.compile(r"кол|к-во|вес", re.I),
     "sum": re.compile(r"сумм|стоим", re.I),
 }
 
 
+# «Товар. Полный расчет» — признак предмета и способа расчёта вместо названия (Контур.ОФД)
+_PAY_ATTR_RE = re.compile(
+    r"^(товар|услуга|работа|подакцизный товар|платеж|платёж)\.?\s+(полный|частичный|предоплата|аванс|кредит)", re.I
+)
+# Служебный хвост в ячейке с названием (Яндекс): «… АГЕНТ ИНН Поставщика: … Признак способа расчета: …»
+_NAME_TAIL_RE = re.compile(r"\s+(?:агент\b|инн поставщика|признак способа расчета|признак предмета расчета)", re.I)
+
+
 def _make_item(name, qty, price, total) -> dict | None:
     # Номер позиции: «1. Молоко», «1) Молоко», «1. | Молоко»
     name = re.sub(r"^\s*\d+\s*[.)]\s*\|?\s+", "", name or "").strip(" |.-–—:*")
+    name = _NAME_TAIL_RE.split(name)[0].strip(" |.-–—:*")
     if not name or qty is None or qty <= 0:
         return None
     if re.match(r"(итог|всего|сумма|ндс|скидк|оплат|налич|безнал)", name, re.I):
@@ -144,6 +153,7 @@ def parse_html_tables(html: str) -> list[dict]:
         rows = [tr for tr in table.find_all("tr") if tr.find_parent("table") is table]
         cols = None
         items = []
+        prev_text = None  # текст предыдущей строки без чисел — название, если в строке с ценой его нет
         for tr in rows:
             cells = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"], recursive=False)]
             if cols is None:
@@ -157,6 +167,9 @@ def parse_html_tables(html: str) -> list[dict]:
                     cols = found
                 continue
             if len(cells) <= max(cols.values()):
+                text = " ".join(cells).strip()
+                if text and not re.search(r"\d+[.,]\d{2}", text):
+                    prev_text = text
                 continue
 
             def num(key):
@@ -167,9 +180,13 @@ def parse_html_tables(html: str) -> list[dict]:
                 except ValueError:
                     return None
 
-            item = _make_item(cells[cols["name"]], num("qty"), num("price"), num("sum"))
+            name = cells[cols["name"]]
+            if _PAY_ATTR_RE.match(name) and prev_text:
+                name = prev_text
+            item = _make_item(name, num("qty"), num("price"), num("sum"))
             if item:
                 items.append(item)
+                prev_text = None
         if len(items) > len(best):
             best = items
     return best
@@ -179,7 +196,7 @@ def parse_html_tables(html: str) -> list[dict]:
 
 # «[Название] 2 x 89,99 [= 179,98]» или «89.99 * 0.532 кг = 47.87»
 _INLINE_RE = re.compile(
-    rf"^(?P<name>.*?)[\s|]*(?P<a>{NUM})\s*(?P<ua>шт|кг|ед)?\.?\s*[xхXХ×*]\s*(?P<b>{NUM})\s*(?P<ub>шт|кг|ед)?\.?"
+    rf"^(?P<name>.*?)[\s|]*(?P<a>{NUM})\s*(?:₽|руб\.?)?\s*(?P<ua>шт|кг|ед)?\.?[\s|]*[xхXХ×*][\s|]*(?P<b>{NUM})\s*(?P<ub>шт|кг|ед)?\.?"
     rf"(?:[\s|]*(?:=|₽|руб\.?)?[\s|]*(?P<s>{NUM}))?\s*(?:₽|руб\.?|р\.?)?$",
     re.I,
 )
@@ -243,7 +260,7 @@ def parse_text_lines(text: str) -> list[dict]:
                 continue
             name = m["name"].strip(" |.-–—:")
             # «Цена * Кол | 59.99 * 1 шт. = 59.99» (билайн ОФД) — это подпись, название строкой выше
-            if not name or re.match(r"(цена|кол)", name, re.I):
+            if not name or re.match(r"(цена|кол)", name, re.I) or _PAY_ATTR_RE.match(name):
                 name = last_text
             item = _make_item(name, qty, price, total)
             if item:
@@ -306,6 +323,7 @@ def parse_triple_lines(text: str) -> list[dict]:
 
 def parse_text(text: str) -> list[dict]:
     """Пробует все построчные форматы и берёт тот, что лучше сходится с итогом."""
+    text = re.sub(r"(?m)^(?:[ \t]*>)+[ \t]?", "", text)  # «> » в начале строк у пересланных писем
     total = find_total(text)
     variants = [parse_text_lines(text), parse_triple_lines(text)]
     return max(variants, key=lambda items: (items_match_total(items, total), len(items)))
@@ -326,6 +344,8 @@ _STORES = [
     (r"о['’]?кей", "О'КЕЙ"),
     (r"самокат", "Самокат"),
     (r"яндекс[ .]?лавка", "Яндекс Лавка"),
+    (r"яндекс[ .]?маркет", "Яндекс Маркет"),
+    (r"яндекс[ .]?ед[аы]", "Яндекс Еда"),
     (r"\bozon\b|\bозон\b", "Ozon"),
     (r"wildberries|вайлдберриз", "Wildberries"),
 ]
@@ -358,8 +378,12 @@ def find_store(text: str) -> str | None:
     for rx, name in _STORES:
         if re.search(rx, text, re.I):
             return name
-    m = re.search(r"\b(ООО|АО|ПАО|ЗАО|ИП)\s+[«\"]?([^»\"\n|]{2,60})", text)
-    return f"{m[1]} {m[2].strip()}" if m else None
+    # Полные формы: «АКЦИОНЕРНОЕ ОБЩЕСТВО "ЛОТОС-М"» → «АО ЛОТОС-М»
+    for full, short in [("ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ", "ООО"), ("ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО", "ПАО"),
+                        ("АКЦИОНЕРНОЕ ОБЩЕСТВО", "АО"), ("ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ", "ИП")]:
+        text = re.sub(full, short, text, flags=re.I)
+    m = re.search(r"\b(ООО|АО|ПАО|ЗАО|ИП)\s+[«\"]?([^»\"\n|<]{2,60})", text)
+    return f"{m[1]} {m[2].strip(' »\"')}" if m else None
 
 
 def find_fiscal(text: str) -> dict:
@@ -571,8 +595,10 @@ def parse_parts(htmls: list[str], texts: list[str], pdf_texts: list[str], use_ll
     }
 
     # Позиций в письме нет, но есть ссылка на чек — пробуем скачать чек с сайта ОФД
-    if not items and fetch_links and links:
-        fetched = fetch_linked_receipt(links)
+    # Письма могут прийти от любого отправителя — по ссылкам ходим, только если это похоже на чек
+    # и ссылка ведёт на конкретный чек (с ФН/ФД/ФП в адресе)
+    if not items and fetch_links and specific and receipt_score(full_text) >= 2:
+        fetched = fetch_linked_receipt(specific)
         if fetched:
             method, link_text, items = fetched
             full_text += "\n\n" + link_text

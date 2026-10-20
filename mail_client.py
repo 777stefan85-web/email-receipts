@@ -24,6 +24,18 @@ def _imap_date(d: date) -> str:
     return f"{d.day:02d}-{_MONTHS[d.month - 1]}-{d.year}"
 
 
+# Признаки чека в заголовках: тема со словом «чек» или отправитель — оператор фискальных данных
+_RECEIPT_SUBJECT_RE = re.compile(r"\bчек|кассов|receipt", re.I)
+_RECEIPT_FROM_RE = re.compile(r"ofd|taxcom|kontur|check\.|echeck|platformaofd|sbis|nalog|receipt|чек", re.I)
+
+
+def looks_like_receipt(head) -> bool:
+    """Быстрая проверка по заголовкам — чтобы не скачивать целиком каждое письмо из ящика.
+    Окончательно чек это или нет, решает разбор содержимого."""
+    return bool(_RECEIPT_SUBJECT_RE.search(str(head.get("Subject", "")))
+                or _RECEIPT_FROM_RE.search(str(head.get("From", ""))))
+
+
 def message_id_of(msg) -> str:
     mid = (msg.get("Message-ID") or "").strip()
     if mid:
@@ -38,7 +50,7 @@ def fetch_new_messages(is_processed) -> list:
 
     is_processed(message_id) -> bool — функция проверки по базе.
     """
-    if not (config.IMAP_USER and config.IMAP_PASSWORD and config.ALLOWED_SENDERS):
+    if not (config.IMAP_USER and config.IMAP_PASSWORD and (config.ALLOWED_SENDERS or config.ANY_SENDER)):
         raise RuntimeError("Не заданы IMAP_USER / IMAP_PASSWORD / ALLOWED_SENDER в .env")
 
     conn = imaplib.IMAP4_SSL(config.IMAP_HOST, config.IMAP_PORT, timeout=120)
@@ -74,10 +86,10 @@ def fetch_new_messages(is_processed) -> list:
                     continue
                 head = email.message_from_bytes(item[1], policy=policy.default)
                 sender = parseaddr(str(head.get("From", "")))[1].lower()
-                if sender in config.ALLOWED_SENDERS:
+                if sender in config.ALLOWED_SENDERS or (config.ANY_SENDER and looks_like_receipt(head)):
                     candidates.append((int(m.group(1)), head))
         candidates.sort(key=lambda c: c[0])
-        log.info("Писем от разрешённого отправителя: %d", len(candidates))
+        log.info("Писем-кандидатов в чеки: %d", len(candidates))
 
         new_messages = []
         # Новые письма в конце списка — идём с конца
